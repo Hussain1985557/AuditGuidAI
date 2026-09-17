@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import { SaqerChat } from '@/components/SaqerChat';
 import { Sidebar } from '@/components/Sidebar';
 import { CrossViewProvider } from '@/lib/crossView';
 import './globals.css';
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Sidebar />
             <main className="main-panel">{children}</main>
           </div>
+          <SaqerChat />
         </CrossViewProvider>
       </body>
     </html>

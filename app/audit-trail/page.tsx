@@ -96,12 +96,12 @@ export default function AuditTrailPage() {
       <section className="panel audit-trail-panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Local storage</p>
+            <p className="eyebrow">Supabase</p>
             <h2>Validation History</h2>
           </div>
         </div>
 
-        <div className="prototype-note">Prototype — locally stored validation history</div>
+        <div className="prototype-note">Prototype — validation history stored in Supabase</div>
 
         <table>
           <thead>

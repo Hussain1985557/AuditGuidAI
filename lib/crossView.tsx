@@ -8,7 +8,8 @@ export type CrossViewIntent =
   | { type: 'openControl'; controlId: string }
   | { type: 'createControl'; prefill: { auditArea?: string; controlName?: string } }
   | { type: 'openAuditTrailRun'; runId: string; mode: 'details' | 'workingPaper' }
-  | { type: 'openRemediation'; findingId: string };
+  | { type: 'openRemediation'; findingId: string }
+  | { type: 'openBranchProfile'; branch: string };
 
 interface CrossViewContextValue {
   intent: CrossViewIntent | null;
