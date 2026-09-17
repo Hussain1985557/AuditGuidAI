@@ -9,12 +9,15 @@ export default function OverviewPage() {
     <div>
       <header className="topbar">
         <div>
-          <p className="eyebrow">Internal Risk Analytics</p>
-          <h1>Audit Overview</h1>
+          <h1>AuditGuard AI</h1>
         </div>
 
         <div className="topbar-actions">
-          <button className="ghost-button">Export</button>
+          <div className="user-meta">
+            <strong>Internal Audit</strong>
+            <span>Risk &amp; Assurance</span>
+          </div>
+          <button className="ghost-button">Export Report</button>
           <button className="primary-button">Run AI review</button>
         </div>
       </header>
@@ -40,7 +43,8 @@ export default function OverviewPage() {
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Risk trend</p>
-              <h2>Quarterly exposure</h2>
+              <h2>Audit Risk Exposure Trend</h2>
+              <p className="page-subtitle">Monthly enterprise risk exposure</p>
             </div>
             <span className="chip positive">-12.4% vs prior quarter</span>
           </div>
@@ -68,10 +72,13 @@ export default function OverviewPage() {
             {recommendations.map((item) => (
               <div className="recommendation-item" key={item.title}>
                 <div className="rec-header">
-                  <span className="rec-tag">{item.tag}</span>
+                  <span className={`rec-tag ${item.tag.toLowerCase()}`}>{item.tag}</span>
                 </div>
                 <h3>{item.title}</h3>
                 <p className="rec-item">{item.detail}</p>
+                <button type="button" className="rec-link">
+                  View Recommendation →
+                </button>
               </div>
             ))}
           </div>

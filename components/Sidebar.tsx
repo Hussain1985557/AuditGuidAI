@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -20,11 +21,8 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <div className="brand-mark">A</div>
-        <div>
-          <div className="brand-name">AuditGuard</div>
-          <div className="brand-subtitle">AI</div>
-        </div>
+        <Image src="/nbb-logo.svg" alt="National Bank of Bahrain" width={168} height={69} className="brand-logo" priority />
+        <span className="brand-subtitle">Internal Audit</span>
       </div>
 
       <nav className="nav">
@@ -39,6 +37,11 @@ export function Sidebar() {
           </Link>
         ))}
       </nav>
+
+      <div className="sidebar-footer">
+        <strong>Internal Audit Division</strong>
+        National Bank of Bahrain
+      </div>
     </aside>
   );
 }
