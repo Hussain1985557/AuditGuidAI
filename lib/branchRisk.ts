@@ -1,6 +1,6 @@
 import { downloadCsv, normalizeHeader, parseCSV } from './csv';
 import { getFindings } from './findings';
-import { BRANCH_RISK_STORAGE_KEY, readStorage, writeStorage } from './storage';
+import { supabase } from './supabaseClient';
 import type {
   BranchRiskMetric,
   BranchRiskSourceKey,
@@ -64,29 +64,6 @@ export const branchRiskDemoSources: Record<BranchRiskSourceKey, BranchSourceReco
   ],
 };
 
-function defaultBranchRiskStore(): BranchRiskStore {
-  return { sources: {}, weights: { ...branchRiskDefaultWeights }, demo: true, uploads: {} };
-}
-
-export function getBranchRiskStore(): BranchRiskStore {
-  return readStorage<BranchRiskStore>(BRANCH_RISK_STORAGE_KEY, defaultBranchRiskStore());
-}
-
-export function saveBranchRiskStore(store: BranchRiskStore): void {
-  writeStorage(BRANCH_RISK_STORAGE_KEY, store);
-}
-
-export function generateBranchImportBatchId(store: BranchRiskStore): string {
-  const existing = Object.values(store.uploads || {})
-    .map((upload) => String(upload?.importBatchId || ''))
-    .filter(Boolean);
-  const highest = existing.reduce((max, value) => {
-    const match = value.match(/^IMP-\d{4}-(\d{4})$/);
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, 0);
-  return `IMP-${new Date().getFullYear()}-${String(highest + 1).padStart(4, '0')}`;
-}
-
 export function canonicalBranchId(value: unknown): string {
   const normalized = String(value || '').trim().replace(/^branch\s*/i, '').trim();
   if (!normalized) {
@@ -101,55 +78,143 @@ export function branchDisplayName(branchId: string): string {
   return /^\d+$/.test(branchId) ? `Branch ${branchId}` : branchId;
 }
 
-function normalizeBranchRiskStoreRecords(store: BranchRiskStore): boolean {
-  let changed = false;
-  (Object.keys(store.sources || {}) as BranchRiskSourceKey[]).forEach((sourceKey) => {
-    store.sources[sourceKey] = (store.sources[sourceKey] || []).map((record) => {
-      const rawBranch = record.branch || record.Branch || record.branchId || record.Branch_ID || record.Branch_Name || '';
-      const normalizedId = canonicalBranchId(record.canonicalBranchId || rawBranch);
-      const normalizedRecord: BranchSourceRecord = {
-        ...record,
-        canonicalBranchId: normalizedId,
-        branch: normalizedId ? branchDisplayName(normalizedId) : '',
-      };
-      if (record.canonicalBranchId !== normalizedId || record.branch !== normalizedRecord.branch) {
-        changed = true;
-      }
-      return normalizedRecord;
-    });
+// --- Supabase-backed store ---
+
+interface BranchRiskRecordRow {
+  id: number;
+  source_key: BranchRiskSourceKey;
+  canonical_branch_id: string;
+  branch: string;
+  data: BranchSourceRecord;
+}
+
+function recordFromRow(row: BranchRiskRecordRow): BranchSourceRecord {
+  return { ...row.data, canonicalBranchId: row.canonical_branch_id, branch: row.branch };
+}
+
+function recordToRow(sourceKey: BranchRiskSourceKey, record: BranchSourceRecord) {
+  const rawBranch =
+    record.canonicalBranchId || record.branch || record.Branch || record.branchId || record.Branch_ID || record.Branch_Name || '';
+  const canonicalId = canonicalBranchId(rawBranch);
+  return {
+    source_key: sourceKey,
+    canonical_branch_id: canonicalId,
+    branch: canonicalId ? branchDisplayName(canonicalId) : '',
+    data: record,
+  };
+}
+
+interface BranchUploadRow {
+  source_key: BranchRiskSourceKey;
+  file_name: string;
+  worksheet_name: string;
+  detected_columns: string[];
+  upload_date: string;
+  import_batch_id: string;
+  records: number;
+  invalid_records: number;
+  duplicate_records: number;
+  status: string;
+}
+
+function uploadFromRow(row: BranchUploadRow): BranchUploadMeta {
+  return {
+    fileName: row.file_name,
+    worksheetName: row.worksheet_name,
+    detectedColumns: row.detected_columns,
+    uploadDate: row.upload_date,
+    importBatchId: row.import_batch_id,
+    records: row.records,
+    invalidRecords: row.invalid_records,
+    duplicateRecords: row.duplicate_records,
+    status: row.status,
+  };
+}
+
+export async function getBranchRiskStore(): Promise<BranchRiskStore> {
+  const [recordsRes, uploadsRes, settingsRes] = await Promise.all([
+    supabase.from('branch_risk_records').select('*'),
+    supabase.from('branch_risk_uploads').select('*'),
+    supabase.from('branch_risk_settings').select('*').eq('id', 1).maybeSingle(),
+  ]);
+  if (recordsRes.error) throw recordsRes.error;
+  if (uploadsRes.error) throw uploadsRes.error;
+  if (settingsRes.error) throw settingsRes.error;
+
+  const sources: BranchRiskStore['sources'] = {};
+  (recordsRes.data as BranchRiskRecordRow[]).forEach((row) => {
+    const key = row.source_key;
+    const bucket = sources[key] || [];
+    bucket.push(recordFromRow(row));
+    sources[key] = bucket;
   });
-  return changed;
+
+  const uploads: BranchRiskStore['uploads'] = {};
+  (uploadsRes.data as BranchUploadRow[]).forEach((row) => {
+    uploads[row.source_key] = uploadFromRow(row);
+  });
+
+  const settings = settingsRes.data as { weights: BranchRiskWeights; demo: boolean } | null;
+
+  return {
+    sources,
+    uploads,
+    weights: settings?.weights || branchRiskDefaultWeights,
+    demo: settings?.demo ?? true,
+  };
 }
 
-export function ensureBranchRiskDemoData(): void {
-  const store = getBranchRiskStore();
-  if (Object.keys(store.sources || {}).length) {
-    if (normalizeBranchRiskStoreRecords(store)) {
-      saveBranchRiskStore(store);
-    }
-    return;
-  }
-  store.sources = JSON.parse(JSON.stringify(branchRiskDemoSources));
-  store.weights = { ...branchRiskDefaultWeights };
-  store.demo = true;
-  store.uploads = {};
-  normalizeBranchRiskStoreRecords(store);
-  saveBranchRiskStore(store);
+export function branchRiskRecords(store: BranchRiskStore, key: BranchRiskSourceKey): BranchSourceRecord[] {
+  return store.sources[key] || [];
 }
 
-export function branchRiskRecords(key: BranchRiskSourceKey): BranchSourceRecord[] {
-  return getBranchRiskStore().sources?.[key] || [];
-}
+export async function ensureBranchRiskDemoData(): Promise<void> {
+  // Atomic compare-and-set: only a call that actually flips demo_seeded false -> true proceeds to
+  // seed. This makes seeding happen exactly once ever, safely under concurrent calls, and means a
+  // later "Clear Demo Branch Data" stays cleared instead of being re-seeded on the next visit.
+  const { data: won, error: lockError } = await supabase
+    .from('branch_risk_settings')
+    .update({ demo_seeded: true })
+    .eq('id', 1)
+    .eq('demo_seeded', false)
+    .select('id');
+  if (lockError) throw lockError;
+  if (!won?.length) return;
 
-export function branchRiskObjectsFromRows(rows: string[][]): BranchSourceRecord[] {
-  if (!rows.length) return [];
-  const headers = rows[0].map(normalizeHeader);
-  return rows.slice(1).map((row) =>
-    headers.reduce<BranchSourceRecord>((record, header, index) => {
-      record[header] = row[index] || '';
-      return record;
-    }, {})
+  const rows = (Object.entries(branchRiskDemoSources) as [BranchRiskSourceKey, BranchSourceRecord[]][]).flatMap(
+    ([sourceKey, records]) => records.map((record) => recordToRow(sourceKey, record))
   );
+  const { error: insertError } = await supabase.from('branch_risk_records').insert(rows);
+  if (insertError) throw insertError;
+
+  const { error: settingsError } = await supabase
+    .from('branch_risk_settings')
+    .update({ weights: branchRiskDefaultWeights, demo: true })
+    .eq('id', 1);
+  if (settingsError) throw settingsError;
+}
+
+async function replaceBranchRiskSource(sourceKey: BranchRiskSourceKey, records: BranchSourceRecord[]): Promise<void> {
+  const { error: deleteError } = await supabase.from('branch_risk_records').delete().eq('source_key', sourceKey);
+  if (deleteError) throw deleteError;
+  if (!records.length) return;
+  const rows = records.map((record) => recordToRow(sourceKey, record));
+  const { error: insertError } = await supabase.from('branch_risk_records').insert(rows);
+  if (insertError) throw insertError;
+}
+
+export async function saveBranchRiskWeights(weights: BranchRiskWeights): Promise<void> {
+  const { error } = await supabase.from('branch_risk_settings').upsert({ id: 1, weights });
+  if (error) throw error;
+}
+
+export async function clearAllBranchRiskData(): Promise<void> {
+  const { error: recordsError } = await supabase.from('branch_risk_records').delete().not('id', 'is', null);
+  if (recordsError) throw recordsError;
+  const { error: uploadsError } = await supabase.from('branch_risk_uploads').delete().not('source_key', 'is', null);
+  if (uploadsError) throw uploadsError;
+  const { error: settingsError } = await supabase.from('branch_risk_settings').update({ demo: false }).eq('id', 1);
+  if (settingsError) throw settingsError;
 }
 
 export function branchName(record: BranchSourceRecord): string {
@@ -189,9 +254,8 @@ export interface BranchRiskSourceMeta {
   importBatch: string;
 }
 
-export function branchRiskSourceMeta(sourceKey: BranchRiskSourceKey): BranchRiskSourceMeta {
+export function branchRiskSourceMeta(sourceKey: BranchRiskSourceKey, store: BranchRiskStore): BranchRiskSourceMeta {
   const definition = branchRiskSourceDefinitions.find((source) => source.key === sourceKey);
-  const store = getBranchRiskStore();
   const upload = store.uploads?.[sourceKey];
   return {
     sourceType: definition?.label || sourceKey,
@@ -280,22 +344,21 @@ export function branchEvidenceFields(record: BranchSourceRecord, sourceKey: Bran
   ];
 }
 
-export function branchRiskMetrics(): BranchRiskMetric[] {
-  const store = getBranchRiskStore();
-  const findings = getFindings();
+export async function branchRiskMetrics(): Promise<BranchRiskMetric[]> {
+  const [store, findings] = await Promise.all([getBranchRiskStore(), getFindings()]);
   const branches = new Set<string>();
   branchRiskSourceDefinitions.forEach(({ key }) =>
-    branchRiskRecords(key).forEach((record) => {
+    branchRiskRecords(store, key).forEach((record) => {
       if (branchName(record)) branches.add(branchName(record));
     })
   );
   const scores: BranchRiskMetric[] = [];
   branches.forEach((branch) => {
-    const complaints = branchRiskRecords('complaints').filter((r) => branchName(r) === branch);
-    const gl = branchRiskRecords('gl').filter((r) => branchName(r) === branch);
-    const access = branchRiskRecords('access').filter((r) => branchName(r) === branch);
-    const shortages = branchRiskRecords('shortages').filter((r) => branchName(r) === branch);
-    const incidents = branchRiskRecords('incidents').filter((r) => branchName(r) === branch);
+    const complaints = branchRiskRecords(store, 'complaints').filter((r) => branchName(r) === branch);
+    const gl = branchRiskRecords(store, 'gl').filter((r) => branchName(r) === branch);
+    const access = branchRiskRecords(store, 'access').filter((r) => branchName(r) === branch);
+    const shortages = branchRiskRecords(store, 'shortages').filter((r) => branchName(r) === branch);
+    const incidents = branchRiskRecords(store, 'incidents').filter((r) => branchName(r) === branch);
     const openFindings = findings.filter(
       (finding) => canonicalBranchId(finding.branch) === branch && finding.status !== 'Closed'
     );
@@ -508,6 +571,17 @@ export function normalizeBranchRiskRecord(record: BranchSourceRecord, sourceKey:
   return normalized;
 }
 
+function branchRiskObjectsFromRows(rows: string[][]): BranchSourceRecord[] {
+  if (!rows.length) return [];
+  const headers = rows[0].map(normalizeHeader);
+  return rows.slice(1).map((row) =>
+    headers.reduce<BranchSourceRecord>((record, header, index) => {
+      record[header] = row[index] || '';
+      return record;
+    }, {})
+  );
+}
+
 export async function buildPendingBranchSourceImport(
   file: File,
   sourceKey: BranchRiskSourceKey
@@ -560,9 +634,16 @@ export function validateComplaintImport(pendingBranchImport: PendingBranchImport
   return '';
 }
 
-export function confirmBranchImport(store: BranchRiskStore, pendingBranchImport: PendingBranchImport): BranchRiskStore {
-  const next: BranchRiskStore = { ...store, sources: { ...store.sources }, uploads: { ...store.uploads } };
-  next.sources[pendingBranchImport.sourceKey] =
+function nextImportBatchId(existingBatchIds: string[]): string {
+  const highest = existingBatchIds.reduce((max, value) => {
+    const match = value.match(/^IMP-\d{4}-(\d{4})$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  return `IMP-${new Date().getFullYear()}-${String(highest + 1).padStart(4, '0')}`;
+}
+
+export async function confirmBranchImport(pendingBranchImport: PendingBranchImport): Promise<void> {
+  const filteredRecords =
     pendingBranchImport.sourceKey === 'complaints'
       ? pendingBranchImport.data
           .filter(
@@ -585,26 +666,38 @@ export function confirmBranchImport(store: BranchRiskStore, pendingBranchImport:
       : pendingBranchImport.data.filter(
           (record) => record.branch && !Number.isNaN(new Date(String(record.date)).getTime())
         );
-  next.demo = false;
-  const uploadMeta: BranchUploadMeta = {
-    fileName: pendingBranchImport.fileName,
-    worksheetName: pendingBranchImport.worksheetName || '',
-    detectedColumns: pendingBranchImport.detectedColumns || [],
-    uploadDate: pendingBranchImport.uploadDate,
-    importBatchId: generateBranchImportBatchId(store),
+
+  await replaceBranchRiskSource(pendingBranchImport.sourceKey, filteredRecords);
+
+  const { data: existingUploads, error: existingUploadsError } = await supabase
+    .from('branch_risk_uploads')
+    .select('import_batch_id');
+  if (existingUploadsError) throw existingUploadsError;
+  const importBatchId = nextImportBatchId((existingUploads || []).map((row) => String(row.import_batch_id || '')));
+
+  const { error: uploadError } = await supabase.from('branch_risk_uploads').upsert({
+    source_key: pendingBranchImport.sourceKey,
+    file_name: pendingBranchImport.fileName,
+    worksheet_name: pendingBranchImport.worksheetName || '',
+    detected_columns: pendingBranchImport.detectedColumns || [],
+    upload_date: pendingBranchImport.uploadDate,
+    import_batch_id: importBatchId,
     records: pendingBranchImport.records,
-    invalidRecords: pendingBranchImport.invalidRecords,
-    duplicateRecords: pendingBranchImport.duplicateRecords,
+    invalid_records: pendingBranchImport.invalidRecords,
+    duplicate_records: pendingBranchImport.duplicateRecords,
     status: 'Imported and confirmed',
-  };
-  next.uploads[pendingBranchImport.sourceKey] = uploadMeta;
-  return next;
+  });
+  if (uploadError) throw uploadError;
+
+  const { error: settingsError } = await supabase.from('branch_risk_settings').update({ demo: false }).eq('id', 1);
+  if (settingsError) throw settingsError;
 }
 
-export function exportBranchRiskAssessment(): void {
+export async function exportBranchRiskAssessment(): Promise<void> {
+  const metrics = await branchRiskMetrics();
   const rows: (string | number)[][] = [
     ['Branch', 'Risk Score', 'Risk Rating', 'Risk Events'],
-    ...branchRiskMetrics().map((item) => [item.branch, item.score, item.rating, item.riskEvents]),
+    ...metrics.map((item) => [item.branch, item.score, item.rating, item.riskEvents]),
   ];
   downloadCsv('branch-risk-assessment.csv', rows);
 }
