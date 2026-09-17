@@ -23,41 +23,44 @@ export default function AuditTrailPage() {
   const [detail, setDetail] = useState<DetailMode>(null);
   const [workingPaper, setWorkingPaper] = useState<WorkingPaper | null>(null);
   const [saveStatus, setSaveStatus] = useState('');
-  const [remediationEvents, setRemediationEvents] = useState(getRemediationAuditEvents());
+  const [remediationEvents, setRemediationEvents] = useState<Awaited<ReturnType<typeof getRemediationAuditEvents>>>([]);
 
   useEffect(() => {
-    ensureSeededHistoricalRun();
-    setEntries(getAuditTrailEntries());
-    setRemediationEvents(getRemediationAuditEvents());
+    void (async () => {
+      await ensureSeededHistoricalRun();
+      setEntries(await getAuditTrailEntries());
+      setRemediationEvents(await getRemediationAuditEvents());
+    })();
   }, []);
 
   useEffect(() => {
     if (intent?.type === 'openAuditTrailRun') {
-      const found = getAuditTrailEntries().find((entry) => entry.runId === intent.runId);
-      if (found) {
-        setNotFoundRunId(null);
-        openDetails(intent.runId, intent.mode);
-      } else {
-        setNotFoundRunId(intent.runId);
-        setDetail(null);
-      }
+      void (async () => {
+        const found = (await getAuditTrailEntries()).find((entry) => entry.runId === intent.runId);
+        if (found) {
+          setNotFoundRunId(null);
+          await openDetails(intent.runId, intent.mode);
+        } else {
+          setNotFoundRunId(intent.runId);
+          setDetail(null);
+        }
+      })();
       setIntent(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent]);
 
-  function openDetails(runId: string, mode: 'details' | 'workingPaper') {
+  async function openDetails(runId: string, mode: 'details' | 'workingPaper') {
+    const paper = mode === 'workingPaper' ? await getWorkingPaperByRun(runId) : null;
     setNotFoundRunId(null);
-    setDetail({ mode, runId });
     setSaveStatus('');
-    if (mode === 'workingPaper') {
-      setWorkingPaper(getWorkingPaperByRun(runId));
-    }
+    if (paper) setWorkingPaper(paper);
+    setDetail({ mode, runId });
   }
 
-  function handleSaveWorkingPaper() {
+  async function handleSaveWorkingPaper() {
     if (!workingPaper) return;
-    saveWorkingPaperByRun(workingPaper.runId, workingPaper);
+    await saveWorkingPaperByRun(workingPaper.runId, workingPaper);
     setSaveStatus('Saved');
   }
 

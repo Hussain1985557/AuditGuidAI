@@ -71,7 +71,7 @@ export default function RafflePage() {
         outsideCampaignPeriod: validRows.filter((row) => row.exceptions.includes('Outside Campaign Period')).length,
       });
       setInvalidRows(invalid);
-      persistAuditTrail(file.name, activeRules, validRows);
+      await persistAuditTrail(file.name, activeRules, validRows);
     } catch {
       setValidationError('Unable to read the CSV file. Please check the file format and try again.');
     }

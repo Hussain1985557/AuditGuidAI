@@ -7,12 +7,14 @@ import { useCrossView } from '@/lib/crossView';
 import { ensureSeededControl, generateControlId, getControls, upsertControl } from '@/lib/controls';
 import { getFindings } from '@/lib/findings';
 import type {
+  AuditTrailEntry,
   Control,
   ControlFrequency,
   ControlNature,
   ControlStatus,
   ControlType,
   Effectiveness,
+  Finding,
   OperatingEffectiveness,
 } from '@/lib/types';
 
@@ -41,16 +43,24 @@ export default function ControlsPage() {
   const [editingControlId, setEditingControlId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState('');
+  const [runs, setRuns] = useState<AuditTrailEntry[]>([]);
+  const [findings, setFindings] = useState<Finding[]>([]);
 
   useEffect(() => {
-    ensureSeededControl();
-    setControls(getControls());
+    void (async () => {
+      await ensureSeededControl();
+      setControls(await getControls());
+      setRuns(await getAuditTrailEntries());
+      setFindings(await getFindings());
+    })();
   }, []);
 
   useEffect(() => {
     if (intent?.type === 'openControl') {
-      const control = getControls().find((item) => item.controlId === intent.controlId);
-      if (control) openEditor(control);
+      void (async () => {
+        const control = (await getControls()).find((item) => item.controlId === intent.controlId);
+        if (control) openEditor(control);
+      })();
       setIntent(null);
     } else if (intent?.type === 'createControl') {
       openEditor(null);
@@ -90,24 +100,23 @@ export default function ControlsPage() {
     setShowEditor(true);
   }
 
-  function backToRegister() {
+  async function backToRegister() {
+    const refreshed = await getControls();
+    setControls(refreshed);
     setShowEditor(false);
     setEditingControlId(null);
-    setControls(getControls());
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.controlName.trim()) {
       setError('Enter a control name before saving.');
       return;
     }
-    const control: Control = { ...form, controlId: editingControlId || generateControlId() };
-    upsertControl(control);
-    backToRegister();
+    const control: Control = { ...form, controlId: editingControlId || (await generateControlId()) };
+    await upsertControl(control);
+    await backToRegister();
   }
 
-  const runs = getAuditTrailEntries();
-  const findings = getFindings();
   const editingControl = controls.find((item) => item.controlId === editingControlId) || null;
 
   return (
