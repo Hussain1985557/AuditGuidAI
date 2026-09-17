@@ -1,0 +1,5 @@
+Complaint Number,Received Date,Branch Code,Branch Name,Client ID,Staff ID,Complaint Type,Details,Case Status,Resolution
+CMP-TEST-001,2026-09-10,004,Central Branch,CUST-01,E104,Teller service,Customer reported a long queue at the teller,Open,
+CMP-TEST-002,2026-09-11,,,CUST-02,,Mobile application,Mobile application login failed,Closed,Resolved
+CMP-TEST-003,2026-09-12,005,Harbour Branch,CUST-03,T104,Cash handling,Cash deposit was not reflected correctly,Under Review,
+CMP-TEST-004,2026-09-13,,,CUST-04,,General service,Customer requested information,Open,

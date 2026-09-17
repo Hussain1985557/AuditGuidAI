@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AuditGuard AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">A</div>
+          <div>
+            <div class="brand-name">AuditGuard</div>
+            <div class="brand-subtitle">AI</div>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-item active" data-view="overview">
+            <span class="nav-icon">◈</span>
+            Overview
+          </button>
+          <button class="nav-item" data-view="raffle">
+            <span class="nav-icon">✦</span>
+            Raffle Validation
+          </button>
+          <button class="nav-item" data-view="branchRisk">
+            <span class="nav-icon">◉</span>
+            Branch Risk Intelligence
+          </button>
+          <button class="nav-item" data-view="auditTrail">
+            <span class="nav-icon">🕘</span>
+            Audit Trail
+          </button>
+          <button class="nav-item" data-view="controls">
+            <span class="nav-icon">▣</span>
+            Controls
+          </button>
+          <button class="nav-item" data-view="risk-map">
+            <span class="nav-icon">◎</span>
+            Risk Map
+          </button>
+          <button class="nav-item" data-view="findings">
+            <span class="nav-icon">◍</span>
+            Findings
+          </button>
+          <button class="nav-item" data-view="remediation">
+            <span class="nav-icon">⚑</span>
+            Remediation
+          </button>
+        </nav>
+
+      </aside>
+
+      <main class="main-panel">
+        <div id="overviewView" class="view-panel active">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Internal Risk Analytics</p>
+              <h1>Audit Overview</h1>
+            </div>
+
+            <div class="topbar-actions">
+              <button class="ghost-button">Export</button>
+              <button class="primary-button">Run AI review</button>
+            </div>
+          </header>
+
+          <section class="summary-grid" id="summaryGrid"></section>
+
+          <section class="content-grid">
+            <div class="panel chart-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Risk trend</p>
+                  <h2>Quarterly exposure</h2>
+                </div>
+                <span class="chip positive">-12.4% vs prior quarter</span>
+              </div>
+
+              <div class="trend-chart" id="trendChart"></div>
+            </div>
+
+            <div class="panel recommendations-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">AI guidance</p>
+                  <h2>Recommended actions</h2>
+                </div>
+              </div>
+              <div class="recommendation-list" id="recommendationList"></div>
+            </div>
+          </section>
+
+          <section class="bottom-grid">
+            <div class="panel table-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Control universe</p>
+                  <h2>High-priority controls</h2>
+                </div>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Control</th>
+                    <th>Owner</th>
+                    <th>Status</th>
+                    <th>Risk</th>
+                    <th>Last test</th>
+                  </tr>
+                </thead>
+                <tbody id="controlTableBody"></tbody>
+              </table>
+            </div>
+
+            <div class="panel activity-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Live update</p>
+                  <h2>Operations pulse</h2>
+                </div>
+              </div>
+              <div class="activity-feed" id="activityFeed"></div>
+            </div>
+          </section>
+        </div>
+
+        <div id="controlsView" class="view-panel">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Auditor-managed control register</p>
+              <h1>Controls</h1>
+            </div>
+            <div class="topbar-actions">
+              <button id="createControlBtn" type="button" class="primary-button">Create New Control</button>
+            </div>
+          </header>
+
+          <section id="controlsRegister" class="panel controls-register-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Risk to closure</p>
+                <h2>Internal Control Register</h2>
+              </div>
+            </div>
+
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Control ID</th>
+                    <th>Control Name</th>
+                    <th>Audit Area</th>
+                    <th>Control Type</th>
+                    <th>Frequency</th>
+                    <th>Control Owner</th>
+                    <th>Status</th>
+                    <th>Related Run ID</th>
+                    <th>Related Finding ID</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="controlsTableBody">
+                  <tr><td colspan="10">No controls created yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="controlEditor" class="panel control-editor-panel" hidden>
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Auditor input</p>
+                <h2 id="controlEditorTitle">Create Control</h2>
+              </div>
+            </div>
+
+            <div id="controlError" class="validation-error" role="alert" hidden></div>
+
+            <div class="control-form-grid">
+              <div class="detail-item"><span>Control ID</span><strong id="controlIdValue">New control ID will be assigned on save</strong></div>
+              <label class="rule-field">
+                <span>Control Name</span>
+                <input id="controlName" type="text" />
+              </label>
+              <label class="rule-field">
+                <span>Audit Area</span>
+                <input id="controlAuditArea" type="text" />
+              </label>
+              <label class="rule-field">
+                <span>Control Type</span>
+                <select id="controlType">
+                  <option>Preventive</option>
+                  <option>Detective</option>
+                  <option>Corrective</option>
+                </select>
+              </label>
+              <label class="rule-field">
+                <span>Control Nature</span>
+                <select id="controlNature">
+                  <option>Manual</option>
+                  <option>Automated</option>
+                  <option>IT-Dependent Manual</option>
+                </select>
+              </label>
+              <label class="rule-field">
+                <span>Frequency</span>
+                <select id="controlFrequency">
+                  <option>Per Transaction</option>
+                  <option>Daily</option>
+                  <option>Weekly</option>
+                  <option>Monthly</option>
+                  <option>Quarterly</option>
+                  <option>Annually</option>
+                  <option>Ad Hoc</option>
+                </select>
+              </label>
+              <label class="rule-field">
+                <span>Control Owner</span>
+                <input id="controlOwner" type="text" />
+              </label>
+              <label class="rule-field">
+                <span>Control Status</span>
+                <select id="controlStatus">
+                  <option>Active</option>
+                  <option>Inactive</option>
+                  <option>Under Review</option>
+                </select>
+              </label>
+              <label class="rule-field">
+                <span>Related Run ID</span>
+                <select id="controlRunId"></select>
+              </label>
+              <label class="rule-field">
+                <span>Related Finding ID</span>
+                <select id="controlFindingId"></select>
+              </label>
+              <label class="rule-field">
+                <span>Design Effectiveness</span>
+                <select id="controlDesignEffectiveness">
+                  <option>Effective</option>
+                  <option>Partially Effective</option>
+                  <option>Ineffective</option>
+                  <option>Not Assessed</option>
+                </select>
+              </label>
+              <label class="rule-field">
+                <span>Operating Effectiveness</span>
+                <select id="controlOperatingEffectiveness">
+                  <option>Effective</option>
+                  <option>Partially Effective</option>
+                  <option>Ineffective</option>
+                  <option>Not Tested</option>
+                </select>
+              </label>
+              <label class="rule-field control-wide-field">
+                <span>Control Objective</span>
+                <textarea id="controlObjective" rows="3"></textarea>
+              </label>
+              <label class="rule-field control-wide-field">
+                <span>Risk Addressed</span>
+                <textarea id="controlRiskAddressed" rows="3"></textarea>
+              </label>
+              <label class="rule-field control-wide-field">
+                <span>Auditor Notes</span>
+                <textarea id="controlAuditorNotes" rows="4"></textarea>
+              </label>
+            </div>
+
+            <div id="controlLinks" class="control-links" hidden></div>
+
+            <div class="working-paper-actions">
+              <button id="saveControlBtn" type="button" class="primary-button">Save Control</button>
+              <button id="backToControlsBtn" type="button" class="ghost-button">Cancel / Back to Controls</button>
+              <span id="controlSaveStatus" class="working-paper-save-status" role="status" aria-live="polite"></span>
+            </div>
+          </section>
+        </div>
+
+        <div id="raffleView" class="view-panel">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Rule-Based Validation</p>
+              <h1>Raffle Validation</h1>
+            </div>
+          </header>
+
+          <section class="panel raffle-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Upload</p>
+                <h2>Raffle file</h2>
+              </div>
+            </div>
+
+            <div id="validationError" class="validation-error" role="alert" hidden></div>
+
+            <label id="uploadDropzone" class="upload-dropzone" for="raffleFileInput">
+              <input id="raffleFileInput" type="file" accept=".csv,.xlsx,.xls" />
+              <div class="upload-icon">⇪</div>
+              <div class="upload-copy">
+                <strong>Upload CSV raffle file</strong>
+                <span id="fileNameLabel">Drop a file here or click to browse</span>
+              </div>
+            </label>
+          </section>
+
+          <section class="panel raffle-rules-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Configuration</p>
+                <h2>Validation Rules</h2>
+              </div>
+            </div>
+
+            <div class="rules-grid">
+              <label class="rule-field">
+                <span>Campaign Start Date</span>
+                <input id="campaignStartDate" type="date" value="2026-01-15" />
+              </label>
+
+              <label class="rule-field">
+                <span>Campaign End Date</span>
+                <input id="campaignEndDate" type="date" value="2026-03-31" />
+              </label>
+
+              <label class="rule-field">
+                <span>Minimum Eligible Amount</span>
+                <input id="minimumEligibleAmount" type="number" value="10" min="0" step="0.01" />
+              </label>
+
+              <label class="rule-field">
+                <span>Raffle Entries per Eligible Amount</span>
+                <input id="entriesPerEligibleAmount" type="number" value="1" min="1" step="1" />
+              </label>
+
+              <label class="rule-field">
+                <span>Exclude Employees</span>
+                <select id="excludeEmployees">
+                  <option selected>Yes</option>
+                  <option>No</option>
+                </select>
+              </label>
+
+              <label class="rule-field">
+                <span>Exclude Reversed Transactions</span>
+                <select id="excludeReversedTransactions">
+                  <option selected>Yes</option>
+                  <option>No</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="raffle-toolbar">
+              <button id="runValidationBtn" type="button" class="primary-button raffle-button">Run Validation</button>
+              <button id="exportExceptionsBtn" type="button" class="ghost-button export-button" hidden>Export Exceptions CSV</button>
+            </div>
+          </section>
+
+          <section class="panel results-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Results</p>
+                <h2>Validation Summary</h2>
+              </div>
+            </div>
+
+            <div class="results-grid">
+              <div class="result-card">
+                <span>Total Entries</span>
+                <strong id="totalEntriesValue">0</strong>
+              </div>
+              <div class="result-card">
+                <span>Valid Entries</span>
+                <strong id="validEntriesValue">0</strong>
+              </div>
+              <div class="result-card">
+                <span>Invalid Entries</span>
+                <strong id="invalidEntriesValue">0</strong>
+              </div>
+              <div class="result-card">
+                <span>Duplicate Entries</span>
+                <strong id="duplicateEntriesValue">0</strong>
+              </div>
+              <div class="result-card">
+                <span>Reversed Transactions</span>
+                <strong id="reversedTransactionsValue">0</strong>
+              </div>
+              <div class="result-card">
+                <span>Outside Campaign Period</span>
+                <strong id="outsideCampaignPeriodValue">0</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel exceptions-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Review</p>
+                <h2>Exceptions</h2>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Customer ID</th>
+                  <th>Transaction ID</th>
+                  <th>Transaction Date</th>
+                  <th>Amount</th>
+                  <th>Number of Entries</th>
+                  <th>Expected Entries</th>
+                  <th>Actual Entries</th>
+                  <th>Exception Reason</th>
+                </tr>
+              </thead>
+              <tbody id="exceptionsTableBody">
+                <tr>
+                  <td colspan="8">No invalid records yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        </div>
+
+        <div id="branchRiskView" class="view-panel">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Branch Risk Monitoring &amp; Analytics</p>
+              <h1>Branch Risk Intelligence</h1>
+            </div>
+            <div class="topbar-actions branch-risk-actions">
+              <label class="compact-field">
+                <span>Reporting Period</span>
+                <select id="branchRiskPeriod"><option>Current Period</option><option>Previous Quarter</option></select>
+              </label>
+              <button id="branchRiskUploadBtn" type="button" class="ghost-button">Data Upload Centre</button>
+              <button id="calculateBranchRiskBtn" type="button" class="primary-button">Calculate Risk</button>
+              <button id="runBranchAiBtn" type="button" class="ghost-button">Run AI Analysis</button>
+              <button id="exportBranchRiskBtn" type="button" class="ghost-button">Export Risk Assessment</button>
+            </div>
+          </header>
+
+          <section class="summary-grid branch-risk-kpis">
+            <article class="summary-card"><div class="card-top"><span>Total Branches</span><span class="card-icon blue">⌂</span></div><div id="branchTotalValue" class="card-figure">0</div></article>
+            <article class="summary-card"><div class="card-top"><span>Critical Risk Branches</span><span class="card-icon red">!</span></div><div id="branchCriticalValue" class="card-figure">0</div></article>
+            <article class="summary-card"><div class="card-top"><span>High Risk Branches</span><span class="card-icon orange">▲</span></div><div id="branchHighValue" class="card-figure">0</div></article>
+            <article class="summary-card"><div class="card-top"><span>Moderate Risk Branches</span><span class="card-icon orange">•</span></div><div id="branchModerateValue" class="card-figure">0</div></article>
+            <article class="summary-card"><div class="card-top"><span>Low Risk Branches</span><span class="card-icon green">✓</span></div><div id="branchLowValue" class="card-figure">0</div></article>
+            <article class="summary-card"><div class="card-top"><span>Total Risk Events</span><span class="card-icon blue">◌</span></div><div id="branchEventsValue" class="card-figure">0</div></article>
+          </section>
+
+          <section class="panel branch-risk-register-panel">
+            <div class="panel-heading"><div><p class="eyebrow">Suggested Audit Attention</p><h2>Branch Risk Register</h2></div><button id="branchRiskMethodologyBtn" type="button" class="ghost-button">Risk Scoring Methodology</button></div>
+            <div class="table-scroll"><table><thead><tr><th>Branch</th><th>Risk Score</th><th>Risk Rating</th><th>Complaints</th><th>GL Exceptions</th><th>Access Exceptions</th><th>Cash/Teller Shortages</th><th>Incidents</th><th>Open Findings</th><th>Overdue Actions</th><th>Trend</th><th>Action</th></tr></thead><tbody id="branchRiskTableBody"></tbody></table></div>
+          </section>
+
+          <section id="branchRiskProfile" class="panel branch-risk-profile-panel" hidden>
+            <div class="panel-heading"><div><p class="eyebrow">Suggested Audit Attention</p><h2 id="branchProfileTitle">Branch Risk Profile</h2></div><button id="backToBranchRiskBtn" type="button" class="ghost-button">Back to Register</button></div>
+            <div id="branchProfileSummary" class="branch-profile-summary"></div>
+            <div id="branchProfileActions" class="control-links" hidden></div>
+            <div id="branchDriverGrid" class="branch-driver-grid"></div>
+            <section id="branchEvidenceDrilldown" class="branch-evidence-drilldown panel" hidden>
+              <div class="panel-heading"><div><p class="eyebrow">Source Evidence / Data Lineage</p><h3 id="branchEvidenceTitle">Risk Indicator Evidence</h3></div><button id="closeBranchEvidenceBtn" type="button" class="ghost-button">Close Evidence</button></div>
+              <div id="branchEvidenceSummary" class="branch-evidence-summary"></div>
+              <div id="branchEvidenceRecords" class="branch-evidence-records"></div>
+            </section>
+            <div id="branchCorrelationPanel" class="working-paper-section"></div>
+            <div id="branchAiPanel" class="working-paper-section"></div>
+          </section>
+
+          <section id="branchRiskUploadCentre" class="panel branch-risk-upload-panel" hidden>
+            <div class="panel-heading"><div><p class="eyebrow">Separate Branch Risk storage</p><h2>Data Upload Centre</h2></div><button id="closeBranchRiskUploadBtn" type="button" class="ghost-button">Back to Risk Dashboard</button></div>
+            <div class="branch-upload-grid" id="branchUploadGrid"></div>
+            <div id="branchDataQualitySummary" class="data-quality-summary"></div>
+            <section id="branchImportReview" class="branch-import-review" hidden>
+              <div class="panel-heading"><div><p class="eyebrow">Auditor confirmation required</p><h3>Import Review</h3></div></div>
+              <div id="branchImportReviewSummary" class="data-quality-summary"></div>
+              <p id="branchImportReviewMessage" class="finding-evidence-message"></p>
+              <div id="complaintImportDetails" class="complaint-import-details" hidden></div>
+              <div class="working-paper-actions">
+                <button id="confirmBranchImportBtn" type="button" class="primary-button">Import to Branch Risk Intelligence</button>
+                <button id="cancelBranchImportBtn" type="button" class="ghost-button">Cancel Import</button>
+              </div>
+            </section>
+            <button id="clearBranchDemoDataBtn" type="button" class="ghost-button">Clear Demo Branch Data</button>
+          </section>
+
+          <section id="branchRiskMethodology" class="panel branch-risk-methodology-panel" hidden>
+            <div class="panel-heading"><div><p class="eyebrow">Auditor configuration</p><h2>Risk Scoring Methodology</h2></div><button id="closeBranchRiskMethodologyBtn" type="button" class="ghost-button">Back to Risk Dashboard</button></div>
+            <div class="branch-weight-grid" id="branchWeightGrid"></div>
+            <p id="branchWeightError" class="validation-error" hidden>Risk weights must total 100%.</p>
+            <button id="saveBranchWeightsBtn" type="button" class="primary-button">Save Risk Weights</button>
+          </section>
+        </div>
+
+        <div id="auditTrailView" class="view-panel">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Prototype</p>
+              <h1>Audit Trail</h1>
+            </div>
+          </header>
+
+          <section class="panel audit-trail-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Local storage</p>
+                <h2>Validation History</h2>
+              </div>
+            </div>
+
+            <div class="prototype-note">Prototype — locally stored validation history</div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Run ID</th>
+                  <th>Date &amp; Time</th>
+                  <th>File Name</th>
+                  <th>Records Tested</th>
+                  <th>Valid</th>
+                  <th>Invalid</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="auditTrailTableBody">
+                <tr>
+                  <td colspan="8">No validation history yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section class="panel audit-trail-panel remediation-audit-events-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Remediation activity</p>
+                <h2>Remediation and Closure Changes</h2>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date &amp; Time</th>
+                    <th>Finding ID</th>
+                    <th>Related Run ID</th>
+                    <th>Remediation Status</th>
+                    <th>Validation Result</th>
+                    <th>Change</th>
+                  </tr>
+                </thead>
+                <tbody id="remediationAuditEventsBody">
+                  <tr><td colspan="6">No remediation changes recorded yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="auditTrailDetails" class="panel audit-trail-details" hidden>
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Details</p>
+                <h2>Run Details</h2>
+              </div>
+            </div>
+            <div id="auditTrailDetailsContent"></div>
+          </section>
+        </div>
+
+        <div id="findingsView" class="view-panel">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Auditor-managed records</p>
+              <h1>Findings</h1>
+            </div>
+            <div class="topbar-actions">
+              <button id="createFindingBtn" type="button" class="primary-button">Create New Finding</button>
+            </div>
+          </header>
+
+          <section id="findingsRegister" class="panel findings-list-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Local storage</p>
+                <h2>Audit Findings</h2>
+              </div>
+            </div>
+
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Finding ID</th>
+                    <th>Title</th>
+                    <th>Related Run ID</th>
+                    <th>Audit Area</th>
+                    <th>Risk Rating</th>
+                    <th>Status</th>
+                    <th>Prepared By</th>
+                    <th>Preparation Date</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="findingsTableBody">
+                  <tr><td colspan="8">No findings created yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="findingEditor" class="panel finding-editor-panel" hidden>
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Auditor input</p>
+                <h2 id="findingEditorTitle">Create Finding</h2>
+              </div>
+            </div>
+
+            <div id="findingError" class="validation-error" role="alert" hidden></div>
+
+            <div class="finding-form-grid">
+              <div class="detail-item"><span>Finding ID</span><strong id="findingIdValue">New finding</strong></div>
+              <label class="rule-field">
+                <span>Related Run ID</span>
+                <select id="findingRunId"></select>
+              </label>
+              <label class="rule-field finding-wide-field">
+                <span>Finding Title</span>
+                <input id="findingTitle" type="text" />
+              </label>
+              <label class="rule-field">
+                <span>Audit Area</span>
+                <input id="findingAuditArea" type="text" />
+              </label>
+              <label class="rule-field">
+                <span>Risk Rating</span>
+                <select id="findingRiskRating">
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </label>
+              <label class="rule-field">
+                <span>Finding Status</span>
+                <select id="findingStatus">
+                  <option value="Draft">Draft</option>
+                  <option value="Open">Open</option>
+                  <option value="Agreed">Agreed</option>
+                  <option value="Closed">Closed</option>
+                </select>
+              </label>
+              <label class="rule-field">
+                <span>Prepared By</span>
+                <input id="findingPreparedBy" type="text" />
+              </label>
+              <label class="rule-field">
+                <span>Preparation Date</span>
+                <input id="findingPreparationDate" type="date" />
+              </label>
+              <label class="rule-field">
+                <span>Reviewed By</span>
+                <input id="findingReviewedBy" type="text" />
+              </label>
+              <label class="rule-field">
+                <span>Review Date</span>
+                <input id="findingReviewDate" type="date" />
+              </label>
+              <label class="rule-field finding-wide-field">
+                <span>Criteria</span>
+                <textarea id="findingCriteria" rows="3"></textarea>
+              </label>
+              <label class="rule-field finding-wide-field">
+                <span>Condition</span>
+                <textarea id="findingCondition" rows="3"></textarea>
+              </label>
+              <label class="rule-field finding-wide-field">
+                <span>Cause</span>
+                <textarea id="findingCause" rows="3"></textarea>
+              </label>
+              <label class="rule-field finding-wide-field">
+                <span>Risk / Impact</span>
+                <textarea id="findingRiskImpact" rows="3"></textarea>
+              </label>
+              <label class="rule-field finding-wide-field">
+                <span>Recommendation</span>
+                <textarea id="findingRecommendation" rows="3"></textarea>
+              </label>
+              <label class="rule-field finding-wide-field">
+                <span>Management Response</span>
+                <textarea id="findingManagementResponse" rows="3"></textarea>
+              </label>
+              <label class="rule-field">
+                <span>Responsible Person / Action Owner</span>
+                <input id="findingActionOwner" type="text" />
+              </label>
+              <label class="rule-field">
+                <span>Target Completion Date</span>
+                <input id="findingTargetDate" type="date" />
+              </label>
+            </div>
+
+            <div class="finding-evidence-section">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Read-only historical evidence</p>
+                  <h3>Supporting Exception Evidence</h3>
+                </div>
+              </div>
+              <p id="findingEvidenceMessage" class="finding-evidence-message"></p>
+              <div id="findingEvidenceList" class="finding-evidence-list"></div>
+            </div>
+
+            <div class="working-paper-actions">
+              <button id="saveFindingBtn" type="button" class="primary-button">Save Finding</button>
+              <button id="backToFindingsBtn" type="button" class="ghost-button">Back to Findings</button>
+              <span id="findingSaveStatus" class="working-paper-save-status" role="status" aria-live="polite"></span>
+            </div>
+          </section>
+        </div>
+
+        <div id="remediationView" class="view-panel">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Auditor-managed actions</p>
+              <h1>Remediation</h1>
+            </div>
+          </header>
+
+          <section id="remediationRegister" class="panel remediation-register-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Linked to saved findings</p>
+                <h2>Remediation Register</h2>
+              </div>
+            </div>
+
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Finding ID</th>
+                    <th>Finding Title</th>
+                    <th>Related Run ID</th>
+                    <th>Risk Rating</th>
+                    <th>Finding Status</th>
+                    <th>Action Owner</th>
+                    <th>Target Completion Date</th>
+                    <th>Management Response</th>
+                    <th>Remediation Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="remediationTableBody">
+                  <tr><td colspan="10">No saved findings available for remediation.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="remediationEditor" class="panel remediation-editor-panel" hidden>
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Finding-linked follow-up</p>
+                <h2>Track Remediation</h2>
+              </div>
+            </div>
+
+            <div id="remediationError" class="validation-error" role="alert" hidden></div>
+
+            <div class="detail-grid">
+              <div class="detail-item"><span>Finding ID</span><strong id="remediationFindingId"></strong></div>
+              <div class="detail-item"><span>Related Run ID</span><strong id="remediationRunId"></strong></div>
+              <div class="detail-item"><span>Finding Title</span><strong id="remediationFindingTitle"></strong></div>
+              <div class="detail-item"><span>Risk Rating</span><strong id="remediationRiskRating"></strong></div>
+              <div class="detail-item"><span>Finding Status</span><strong id="remediationFindingStatus"></strong></div>
+              <div class="detail-item"><span>Responsible Person / Action Owner</span><strong id="remediationActionOwner"></strong></div>
+              <div class="detail-item"><span>Target Completion Date</span><strong id="remediationTargetDate"></strong></div>
+              <div class="detail-item"><span>Management Response</span><strong id="remediationManagementResponse"></strong></div>
+            </div>
+
+            <div class="remediation-form-grid">
+              <label class="rule-field">
+                <span>Remediation Status</span>
+                <select id="remediationStatus">
+                  <option value="Not Started">Not Started</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Pending Validation">Pending Validation</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Closed">Closed</option>
+                </select>
+              </label>
+              <label class="rule-field">
+                <span>Follow-up Date</span>
+                <input id="remediationFollowUpDate" type="date" />
+              </label>
+              <label class="rule-field remediation-wide-field">
+                <span>Remediation Evidence</span>
+                <textarea id="remediationEvidence" rows="4" placeholder="Record evidence provided by management."></textarea>
+              </label>
+              <label class="rule-field remediation-wide-field">
+                <span>Auditor Validation / Re-test Performed</span>
+                <textarea id="remediationValidationPerformed" rows="4" placeholder="Record the auditor's validation or re-test procedures performed."></textarea>
+              </label>
+              <label class="rule-field">
+                <span>Validation Date</span>
+                <input id="remediationValidationDate" type="date" />
+              </label>
+              <label class="rule-field">
+                <span>Validation Result</span>
+                <select id="remediationValidationResult">
+                  <option value="">Not completed</option>
+                  <option value="Effective">Effective</option>
+                  <option value="Partially Effective">Partially Effective</option>
+                  <option value="Ineffective">Ineffective</option>
+                </select>
+              </label>
+              <label class="rule-field remediation-wide-field">
+                <span>Auditor Comments</span>
+                <textarea id="remediationAuditorComments" rows="4"></textarea>
+              </label>
+              <label class="rule-field remediation-wide-field">
+                <span>Closure / Validation Result</span>
+                <textarea id="remediationClosureResult" rows="4"></textarea>
+              </label>
+            </div>
+
+            <div class="working-paper-actions">
+              <button id="saveRemediationBtn" type="button" class="primary-button">Save Remediation</button>
+              <button id="backToRemediationBtn" type="button" class="ghost-button">Back to Remediation</button>
+              <span id="remediationSaveStatus" class="working-paper-save-status" role="status" aria-live="polite"></span>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
