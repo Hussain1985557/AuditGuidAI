@@ -1122,6 +1122,175 @@ h2 {
   margin-top: 20px;
 }
 
+.branch-register-tools,
+.view-toggle,
+.heatmap-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.view-toggle {
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(10, 23, 36, 0.72);
+}
+
+.view-toggle button {
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 11px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.view-toggle button.active,
+.view-toggle button:hover {
+  background: rgba(99, 210, 255, 0.14);
+  color: var(--text);
+}
+
+.branch-heatmap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.heatmap-toolbar {
+  justify-content: flex-end;
+}
+
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+}
+
+.heatmap-cell {
+  position: relative;
+  min-height: 150px;
+  padding: 16px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: #13202e;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.heatmap-cell:hover,
+.heatmap-cell:focus-visible,
+.heatmap-cell.hovered {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.3);
+  z-index: 2;
+}
+
+.heatmap-cell.low { background: #9bd7f5; }
+.heatmap-cell.moderate { background: #f59e0b; }
+.heatmap-cell.high { background: #dc2626; color: #fff7ed; }
+.heatmap-cell.critical { background: #651b2a; color: #fff1f2; }
+
+.heatmap-cell-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.heatmap-cell-heading strong:first-child {
+  font-size: 1rem;
+}
+
+.heatmap-cell .risk-badge {
+  padding: 4px 7px;
+  background: rgba(255, 255, 255, 0.24);
+  color: inherit;
+}
+
+.heatmap-score {
+  display: block;
+  margin-top: 26px;
+  font-size: 1.7rem;
+}
+
+.heatmap-detail-panel {
+  min-height: 154px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(10, 23, 36, 0.82);
+  box-shadow: var(--shadow);
+}
+
+.heatmap-breakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 12px;
+  margin-bottom: 14px;
+  font-size: 0.72rem;
+}
+
+.heatmap-detail-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.heatmap-detail-heading h3 {
+  margin: 0;
+}
+
+.heatmap-detail-score {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.heatmap-detail-score strong {
+  font-size: 1.25rem;
+}
+
+.heatmap-breakdown span {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.heatmap-legend {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.heatmap-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.legend-swatch.low { background: #9bd7f5; }
+.legend-swatch.moderate { background: #f59e0b; }
+.legend-swatch.high { background: #dc2626; }
+.legend-swatch.critical { background: #651b2a; }
+
 .risk-badge {
   display: inline-flex;
   align-items: center;
@@ -1492,12 +1661,30 @@ h2 {
   }
 
   .branch-risk-actions,
+  .branch-register-tools,
   .branch-upload-grid,
   .branch-driver-grid,
   .data-quality-summary,
   .branch-weight-grid,
   .branch-evidence-fields {
     grid-template-columns: 1fr;
+  }
+
+  .branch-register-tools {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .view-toggle {
+    flex: 1;
+  }
+
+  .view-toggle button {
+    flex: 1;
+  }
+
+  .branch-register-tools > .ghost-button {
+    width: 100%;
   }
 
   .finding-wide-field,

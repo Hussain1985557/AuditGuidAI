@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCrossView } from '@/lib/crossView';
 import { formatNumber } from '@/lib/csv';
@@ -64,6 +64,10 @@ export default function BranchRiskPage() {
   const [profileBranch, setProfileBranch] = useState<string | null>(null);
   const [showUploadCentre, setShowUploadCentre] = useState(false);
   const [showMethodology, setShowMethodology] = useState(false);
+  const [registerView, setRegisterView] = useState<'table' | 'heatmap'>('table');
+  const [heatMapSort, setHeatMapSort] = useState<'score' | 'branch'>('score');
+  const [hoveredHeatMapBranch, setHoveredHeatMapBranch] = useState<string | null>(null);
+  const heatMapHoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [weightsForm, setWeightsForm] = useState<BranchRiskWeights>(branchRiskDefaultWeights);
   const [weightError, setWeightError] = useState(false);
   const [evidenceKey, setEvidenceKey] = useState<keyof BranchRiskWeights | null>(null);
@@ -92,6 +96,30 @@ export default function BranchRiskPage() {
     () => (profileBranch ? metrics.find((item) => item.branch === profileBranch) || null : null),
     [profileBranch, metrics]
   );
+
+  const heatMapMetrics = useMemo(
+    () => [...metrics].sort((a, b) => (heatMapSort === 'score' ? b.score - a.score : a.displayBranch.localeCompare(b.displayBranch))),
+    [heatMapSort, metrics]
+  );
+
+  const hoveredHeatMapItem = useMemo(
+    () => (hoveredHeatMapBranch ? metrics.find((item) => item.branch === hoveredHeatMapBranch) || null : null),
+    [hoveredHeatMapBranch, metrics]
+  );
+
+  function showHeatMapDetails(branch: string) {
+    if (heatMapHoverTimeout.current) clearTimeout(heatMapHoverTimeout.current);
+    setHoveredHeatMapBranch(branch);
+  }
+
+  function scheduleHeatMapDetailsClear() {
+    if (heatMapHoverTimeout.current) clearTimeout(heatMapHoverTimeout.current);
+    heatMapHoverTimeout.current = setTimeout(() => setHoveredHeatMapBranch(null), 120);
+  }
+
+  function keepHeatMapDetails() {
+    if (heatMapHoverTimeout.current) clearTimeout(heatMapHoverTimeout.current);
+  }
 
   function openProfile(branch: string) {
     setProfileBranch(branch);
@@ -273,49 +301,150 @@ export default function BranchRiskPage() {
             <p className="eyebrow">Suggested Audit Attention</p>
             <h2>Branch Risk Register</h2>
           </div>
-          <button type="button" className="ghost-button" onClick={openMethodology}>
-            Risk Scoring Methodology
-          </button>
+          <div className="branch-register-tools">
+            <div className="view-toggle" aria-label="Branch risk register view">
+              <button
+                type="button"
+                className={registerView === 'table' ? 'active' : ''}
+                aria-pressed={registerView === 'table'}
+                onClick={() => setRegisterView('table')}
+              >
+                Table View
+              </button>
+              <button
+                type="button"
+                className={registerView === 'heatmap' ? 'active' : ''}
+                aria-pressed={registerView === 'heatmap'}
+                onClick={() => setRegisterView('heatmap')}
+              >
+                Heat Map View
+              </button>
+            </div>
+            <button type="button" className="ghost-button" onClick={openMethodology}>
+              Risk Scoring Methodology
+            </button>
+          </div>
         </div>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Branch</th><th>Risk Score</th><th>Risk Rating</th><th>Complaints</th><th>GL Exceptions</th>
-                <th>Access Exceptions</th><th>Cash/Teller Shortages</th><th>Incidents</th><th>Open Findings</th>
-                <th>Overdue Actions</th><th>Trend</th><th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {metrics.length ? (
-                metrics.map((item) => (
-                  <tr key={item.branch}>
-                    <td>{item.displayBranch}</td>
-                    <td>{item.score}/100</td>
-                    <td><span className={`risk-badge ${item.rating.toLowerCase()}`}>{item.rating}</span></td>
-                    <td>{item.complaints.length}</td>
-                    <td>{item.glExceptions.length}</td>
-                    <td>{item.accessExceptions.length}</td>
-                    <td>{item.shortages.length}</td>
-                    <td>{item.incidents.length}</td>
-                    <td>{item.openFindings.length}</td>
-                    <td>{item.overdueActions.length}</td>
-                    <td>{item.score >= 60 ? 'Elevated' : 'Stable'}</td>
-                    <td>
-                      <button type="button" className="audit-trail-button" onClick={() => openProfile(item.branch)}>
-                        View Risk Profile
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
+        {registerView === 'table' ? (
+          <div className="table-scroll">
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan={12}>No branch data available.</td>
+                  <th>Branch</th><th>Risk Score</th><th>Risk Rating</th><th>Complaints</th><th>GL Exceptions</th>
+                  <th>Access Exceptions</th><th>Cash/Teller Shortages</th><th>Incidents</th><th>Open Findings</th>
+                  <th>Overdue Actions</th><th>Trend</th><th>Action</th>
                 </tr>
+              </thead>
+              <tbody>
+                {metrics.length ? (
+                  metrics.map((item) => (
+                    <tr key={item.branch}>
+                      <td>{item.displayBranch}</td>
+                      <td>{item.score}/100</td>
+                      <td><span className={`risk-badge ${item.rating.toLowerCase()}`}>{item.rating}</span></td>
+                      <td>{item.complaints.length}</td>
+                      <td>{item.glExceptions.length}</td>
+                      <td>{item.accessExceptions.length}</td>
+                      <td>{item.shortages.length}</td>
+                      <td>{item.incidents.length}</td>
+                      <td>{item.openFindings.length}</td>
+                      <td>{item.overdueActions.length}</td>
+                      <td>{item.score >= 60 ? 'Elevated' : 'Stable'}</td>
+                      <td>
+                        <button type="button" className="audit-trail-button" onClick={() => openProfile(item.branch)}>
+                          View Risk Profile
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={12}>No branch data available.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="branch-heatmap">
+            <div className="heatmap-toolbar">
+              <label className="compact-field">
+                <span>Sort Heat Map</span>
+                <select value={heatMapSort} onChange={(event) => setHeatMapSort(event.target.value as 'score' | 'branch')}>
+                  <option value="score">Highest risk first</option>
+                  <option value="branch">Branch name A-Z</option>
+                </select>
+              </label>
+            </div>
+            {heatMapMetrics.length ? (
+              <div className="heatmap-grid">
+                {heatMapMetrics.map((item) => {
+                  const hovered = hoveredHeatMapBranch === item.branch;
+                  return (
+                    <article
+                      className={`heatmap-cell ${item.rating.toLowerCase()} ${hovered ? 'hovered' : ''}`}
+                      key={item.branch}
+                      tabIndex={0}
+                      onMouseEnter={() => showHeatMapDetails(item.branch)}
+                      onMouseLeave={scheduleHeatMapDetailsClear}
+                      onFocus={() => showHeatMapDetails(item.branch)}
+                      onBlur={scheduleHeatMapDetailsClear}
+                    >
+                      <div className="heatmap-cell-heading">
+                        <strong>{item.displayBranch}</strong>
+                        <span className="risk-badge">{item.rating}</span>
+                      </div>
+                      <strong className="heatmap-score">{item.score}/100</strong>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="finding-evidence-message">No branch data available.</p>
+            )}
+            <section
+              className="heatmap-detail-panel"
+              onMouseEnter={keepHeatMapDetails}
+              onMouseLeave={scheduleHeatMapDetailsClear}
+              aria-live="polite"
+            >
+              {hoveredHeatMapItem ? (
+                <>
+                  <div className="heatmap-detail-heading">
+                    <div>
+                      <p className="eyebrow">Selected Branch</p>
+                      <h3>{hoveredHeatMapItem.displayBranch}</h3>
+                    </div>
+                    <div className="heatmap-detail-score">
+                      <strong>{hoveredHeatMapItem.score}/100</strong>
+                      <span className={`risk-badge ${hoveredHeatMapItem.rating.toLowerCase()}`}>{hoveredHeatMapItem.rating}</span>
+                    </div>
+                  </div>
+                  <div className="heatmap-breakdown">
+                    <span>Complaints <strong>{hoveredHeatMapItem.complaints.length}</strong></span>
+                    <span>GL Exceptions <strong>{hoveredHeatMapItem.glExceptions.length}</strong></span>
+                    <span>Access Exceptions <strong>{hoveredHeatMapItem.accessExceptions.length}</strong></span>
+                    <span>Cash/Teller Shortages <strong>{hoveredHeatMapItem.shortages.length}</strong></span>
+                    <span>Incidents <strong>{hoveredHeatMapItem.incidents.length}</strong></span>
+                    <span>Open Findings <strong>{hoveredHeatMapItem.openFindings.length}</strong></span>
+                    <span>Overdue Actions <strong>{hoveredHeatMapItem.overdueActions.length}</strong></span>
+                    <span>Trend <strong>{hoveredHeatMapItem.score >= 60 ? 'Elevated' : 'Stable'}</strong></span>
+                  </div>
+                  <button type="button" className="audit-trail-button" onClick={() => openProfile(hoveredHeatMapItem.branch)}>
+                    View Risk Profile
+                  </button>
+                </>
+              ) : (
+                <p className="finding-evidence-message">Hover over a branch to see details.</p>
               )}
-            </tbody>
-          </table>
-        </div>
+            </section>
+            <div className="heatmap-legend" aria-label="Risk rating legend">
+              {(['Low', 'Moderate', 'High', 'Critical'] as const).map((rating) => (
+                <span key={rating}><i className={`legend-swatch ${rating.toLowerCase()}`} />{rating}</span>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {profileItem ? (
