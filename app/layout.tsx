@@ -11,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'AuditGuard AI',
-  description: 'A lightweight audit analytics dashboard.',
+  title: 'NBB Internal Audit',
+  description: 'National Bank of Bahrain internal audit, risk and controls analytics platform.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
