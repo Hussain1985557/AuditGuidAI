@@ -5,8 +5,10 @@ import { useCrossView } from '@/lib/crossView';
 import { getFindings } from '@/lib/findings';
 import {
   getRemediationByFinding,
+  getRemediationRecords,
   hasRemediationRecord,
   recordRemediationAuditEvent,
+  remediationFromMap,
   saveRemediation as persistRemediation,
 } from '@/lib/remediation';
 import type { Finding, Remediation, RemediationStatus, ValidationResult } from '@/lib/types';
@@ -14,39 +16,47 @@ import type { Finding, Remediation, RemediationStatus, ValidationResult } from '
 export default function RemediationPage() {
   const { intent, setIntent } = useCrossView();
   const [findings, setFindings] = useState<Finding[]>([]);
+  const [remediationMap, setRemediationMap] = useState<Record<string, Remediation>>({});
   const [showEditor, setShowEditor] = useState(false);
   const [activeFinding, setActiveFinding] = useState<Finding | null>(null);
   const [form, setForm] = useState<Remediation | null>(null);
   const [error, setError] = useState('');
 
+  async function refreshRegister() {
+    setFindings(await getFindings());
+    setRemediationMap(await getRemediationRecords());
+  }
+
   useEffect(() => {
-    setFindings(getFindings());
+    void refreshRegister();
   }, []);
 
   useEffect(() => {
     if (intent?.type === 'openRemediation') {
-      const finding = getFindings().find((item) => item.findingId === intent.findingId);
-      if (finding) openEditor(finding);
+      void (async () => {
+        const finding = (await getFindings()).find((item) => item.findingId === intent.findingId);
+        if (finding) await openEditor(finding);
+      })();
       setIntent(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent]);
 
-  function openEditor(finding: Finding) {
+  async function openEditor(finding: Finding) {
     setActiveFinding(finding);
-    setForm(getRemediationByFinding(finding.findingId));
+    setForm(await getRemediationByFinding(finding.findingId));
     setError('');
     setShowEditor(true);
   }
 
-  function backToRegister() {
+  async function backToRegister() {
+    await refreshRegister();
     setShowEditor(false);
     setActiveFinding(null);
     setForm(null);
-    setFindings(getFindings());
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!activeFinding || !form) return;
 
     if (form.status === 'Closed' && (!form.validationPerformed.trim() || !form.validationDate || !form.validationResult)) {
@@ -56,16 +66,16 @@ export default function RemediationPage() {
       return;
     }
 
-    const previous = getRemediationByFinding(activeFinding.findingId);
-    const hadPrevious = hasRemediationRecord(activeFinding.findingId);
-    persistRemediation(form);
+    const previous = await getRemediationByFinding(activeFinding.findingId);
+    const hadPrevious = await hasRemediationRecord(activeFinding.findingId);
+    await persistRemediation(form);
     const change = hadPrevious && previous.status !== form.status
       ? `Remediation status changed from ${previous.status} to ${form.status}.`
       : form.status === 'Closed'
         ? 'Remediation closed after auditor validation.'
         : 'Remediation record updated.';
-    recordRemediationAuditEvent(activeFinding, form, change);
-    backToRegister();
+    await recordRemediationAuditEvent(activeFinding, form, change);
+    await backToRegister();
   }
 
   return (
@@ -108,7 +118,7 @@ export default function RemediationPage() {
                     .slice()
                     .reverse()
                     .map((finding) => {
-                      const remediation = getRemediationByFinding(finding.findingId);
+                      const remediation = remediationFromMap(remediationMap, finding.findingId);
                       return (
                         <tr key={finding.findingId}>
                           <td>{finding.findingId}</td>

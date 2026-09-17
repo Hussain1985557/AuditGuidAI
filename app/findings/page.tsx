@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { getRunEvidence, getAuditTrailEntries } from '@/lib/auditTrail';
 import { useCrossView } from '@/lib/crossView';
 import { generateFindingId, getFindings, upsertFinding } from '@/lib/findings';
-import type { ExceptionEvidenceRecord, Finding, FindingStatus, RiskRating } from '@/lib/types';
+import type { AuditTrailEntry, ExceptionEvidenceRecord, Finding, FindingStatus, RiskRating } from '@/lib/types';
 
 const EMPTY_FORM = {
   relatedRunId: '',
@@ -36,28 +36,35 @@ export default function FindingsPage() {
   const [error, setError] = useState('');
   const [evidence, setEvidence] = useState<ExceptionEvidenceRecord[]>([]);
   const [selectedEvidence, setSelectedEvidence] = useState<Set<number>>(new Set());
+  const [completedRuns, setCompletedRuns] = useState<AuditTrailEntry[]>([]);
 
   useEffect(() => {
-    setFindings(getFindings());
+    void (async () => {
+      setFindings(await getFindings());
+      setCompletedRuns((await getAuditTrailEntries()).filter((entry) => entry.status === 'Completed'));
+    })();
   }, []);
 
   useEffect(() => {
     if (intent?.type === 'openFinding') {
-      const finding = getFindings().find((item) => item.findingId === intent.findingId);
-      if (finding) {
-        openEditor(finding);
-      } else {
-        setNotFoundId(intent.findingId);
-        setShowEditor(true);
-      }
+      void (async () => {
+        const finding = (await getFindings()).find((item) => item.findingId === intent.findingId);
+        if (finding) {
+          await openEditor(finding);
+        } else {
+          setNotFoundId(intent.findingId);
+          setShowEditor(true);
+        }
+      })();
       setIntent(null);
     } else if (intent?.type === 'createFinding') {
-      openEditor(null);
-      setForm((prev) => ({
-        ...prev,
-        auditArea: intent.prefill.auditArea || prev.auditArea,
-        condition: intent.prefill.condition || prev.condition,
-      }));
+      void openEditor(null).then(() => {
+        setForm((prev) => ({
+          ...prev,
+          auditArea: intent.prefill.auditArea || prev.auditArea,
+          condition: intent.prefill.condition || prev.condition,
+        }));
+      });
       setIntent(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -67,19 +74,20 @@ export default function FindingsPage() {
     return `${record.transactionId}|${record.transactionDate}|${record.customerId}`;
   }
 
-  function loadEvidenceFor(runId: string, preselected: ExceptionEvidenceRecord[]) {
-    const runEvidence = getRunEvidence(runId);
+  async function loadEvidenceFor(runId: string, preselected: ExceptionEvidenceRecord[]) {
+    const runEvidence = await getRunEvidence(runId);
     setEvidence(runEvidence);
     const selectedKeys = new Set(preselected.map(evidenceKey));
     setSelectedEvidence(new Set(runEvidence.map((record, index) => (selectedKeys.has(evidenceKey(record)) ? index : -1)).filter((i) => i >= 0)));
   }
 
-  function openEditor(finding: Finding | null) {
+  async function openEditor(finding: Finding | null) {
     setNotFoundId(null);
     setEditingFindingId(finding ? finding.findingId : null);
     setError('');
-    const completedRuns = getAuditTrailEntries().filter((entry) => entry.status === 'Completed');
-    const defaultRunId = finding?.relatedRunId || completedRuns[0]?.runId || '';
+    const runs = (await getAuditTrailEntries()).filter((entry) => entry.status === 'Completed');
+    setCompletedRuns(runs);
+    const defaultRunId = finding?.relatedRunId || runs[0]?.runId || '';
     setForm(
       finding
         ? {
@@ -103,20 +111,21 @@ export default function FindingsPage() {
           }
         : { ...EMPTY_FORM, relatedRunId: defaultRunId }
     );
-    loadEvidenceFor(defaultRunId, finding?.supportingExceptionEvidence || []);
+    await loadEvidenceFor(defaultRunId, finding?.supportingExceptionEvidence || []);
     setShowEditor(true);
   }
 
-  function backToRegister() {
+  async function backToRegister() {
+    const refreshed = await getFindings();
+    setFindings(refreshed);
     setShowEditor(false);
     setEditingFindingId(null);
     setNotFoundId(null);
-    setFindings(getFindings());
   }
 
   function handleRunChange(runId: string) {
     setForm({ ...form, relatedRunId: runId });
-    loadEvidenceFor(runId, []);
+    void loadEvidenceFor(runId, []);
   }
 
   function toggleEvidence(index: number) {
@@ -128,7 +137,7 @@ export default function FindingsPage() {
     });
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.relatedRunId) {
       setError('Select a completed validation Run ID before saving the finding.');
       return;
@@ -140,17 +149,15 @@ export default function FindingsPage() {
 
     const finding: Finding = {
       ...form,
-      findingId: editingFindingId || generateFindingId(),
+      findingId: editingFindingId || (await generateFindingId()),
       supportingExceptionEvidence: Array.from(selectedEvidence)
         .sort((a, b) => a - b)
         .map((index) => evidence[index])
         .filter(Boolean),
     };
-    upsertFinding(finding);
-    backToRegister();
+    await upsertFinding(finding);
+    await backToRegister();
   }
-
-  const completedRuns = getAuditTrailEntries().filter((entry) => entry.status === 'Completed');
 
   return (
     <div>

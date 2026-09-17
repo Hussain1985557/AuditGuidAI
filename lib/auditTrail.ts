@@ -1,4 +1,4 @@
-import { AUDIT_TRAIL_STORAGE_KEY, WORKING_PAPER_STORAGE_KEY, readStorage, writeStorage } from './storage';
+import { supabase } from './supabaseClient';
 import type {
   AuditTrailEntry,
   ValidatedRaffleRow,
@@ -7,17 +7,79 @@ import type {
   WorkingPaper,
 } from './types';
 
-export function getAuditTrailEntries(): AuditTrailEntry[] {
-  return readStorage<AuditTrailEntry[]>(AUDIT_TRAIL_STORAGE_KEY, []);
+interface AuditTrailRow {
+  run_id: string;
+  date_time: string;
+  file_name: string;
+  campaign_start_date: string | null;
+  campaign_end_date: string | null;
+  minimum_eligible_amount: number;
+  entries_per_eligible_amount: number;
+  exclude_employees: boolean;
+  exclude_reversed_transactions: boolean;
+  total_records_tested: number;
+  valid_records: number;
+  invalid_records: number;
+  duplicate_records: number;
+  reversed_transactions: number;
+  outside_campaign_period: number;
+  exception_evidence: AuditTrailEntry['exceptionEvidence'];
+  status: string;
 }
 
-export function saveAuditTrailEntries(entries: AuditTrailEntry[]): void {
-  writeStorage(AUDIT_TRAIL_STORAGE_KEY, entries);
+function fromRow(row: AuditTrailRow): AuditTrailEntry {
+  return {
+    runId: row.run_id,
+    dateTime: row.date_time,
+    fileName: row.file_name,
+    campaignStartDate: row.campaign_start_date || '',
+    campaignEndDate: row.campaign_end_date || '',
+    minimumEligibleAmount: row.minimum_eligible_amount,
+    entriesPerEligibleAmount: row.entries_per_eligible_amount,
+    excludeEmployees: row.exclude_employees ? 'Yes' : 'No',
+    excludeReversedTransactions: row.exclude_reversed_transactions ? 'Yes' : 'No',
+    totalRecordsTested: row.total_records_tested,
+    validRecords: row.valid_records,
+    invalidRecords: row.invalid_records,
+    duplicateRecords: row.duplicate_records,
+    reversedTransactions: row.reversed_transactions,
+    outsideCampaignPeriod: row.outside_campaign_period,
+    exceptionEvidence: row.exception_evidence,
+    status: 'Completed',
+  };
 }
 
-export function generateRunId(): string {
+function toRow(entry: AuditTrailEntry): Omit<AuditTrailRow, 'status'> & { status: string } {
+  return {
+    run_id: entry.runId,
+    date_time: entry.dateTime,
+    file_name: entry.fileName,
+    campaign_start_date: entry.campaignStartDate || null,
+    campaign_end_date: entry.campaignEndDate || null,
+    minimum_eligible_amount: entry.minimumEligibleAmount,
+    entries_per_eligible_amount: entry.entriesPerEligibleAmount,
+    exclude_employees: entry.excludeEmployees === 'Yes',
+    exclude_reversed_transactions: entry.excludeReversedTransactions === 'Yes',
+    total_records_tested: entry.totalRecordsTested,
+    valid_records: entry.validRecords,
+    invalid_records: entry.invalidRecords,
+    duplicate_records: entry.duplicateRecords,
+    reversed_transactions: entry.reversedTransactions,
+    outside_campaign_period: entry.outsideCampaignPeriod,
+    exception_evidence: entry.exceptionEvidence,
+    status: entry.status,
+  };
+}
+
+export async function getAuditTrailEntries(): Promise<AuditTrailEntry[]> {
+  const { data, error } = await supabase.from('audit_trail_entries').select('*').order('date_time', { ascending: true });
+  if (error) throw error;
+  return (data as AuditTrailRow[]).map(fromRow);
+}
+
+export async function generateRunId(): Promise<string> {
   const currentYear = new Date().getFullYear();
-  const entries = getAuditTrailEntries();
+  const entries = await getAuditTrailEntries();
   const yearEntries = entries.filter((entry) => entry.runId && entry.runId.startsWith(`RV-${currentYear}-`));
   const highest = yearEntries.reduce((max, entry) => {
     const match = entry.runId.match(/RV-(\d{4})-(\d{6})$/);
@@ -31,14 +93,14 @@ export function generateRunId(): string {
   return `RV-${currentYear}-${String(nextSequence).padStart(6, '0')}`;
 }
 
-export function buildAuditTrailRecord(
+export async function buildAuditTrailRecord(
   fileName: string,
   rules: ValidationRules,
   summary: ValidationSummary,
   invalidRows: ValidatedRaffleRow[]
-): AuditTrailEntry {
+): Promise<AuditTrailEntry> {
   return {
-    runId: generateRunId(),
+    runId: await generateRunId(),
     dateTime: new Date().toISOString(),
     fileName,
     campaignStartDate: rules.startDate,
@@ -66,7 +128,11 @@ export function buildAuditTrailRecord(
   };
 }
 
-export function persistAuditTrail(fileName: string, rules: ValidationRules, validRows: ValidatedRaffleRow[]): AuditTrailEntry {
+export async function persistAuditTrail(
+  fileName: string,
+  rules: ValidationRules,
+  validRows: ValidatedRaffleRow[]
+): Promise<AuditTrailEntry> {
   const totalRecordsTested = validRows.length;
   const validRecords = validRows.filter((row) => row.isValid).length;
   const invalidRecords = totalRecordsTested - validRecords;
@@ -83,20 +149,22 @@ export function persistAuditTrail(fileName: string, rules: ValidationRules, vali
     outsideCampaignPeriod,
   };
 
-  const record = buildAuditTrailRecord(fileName, rules, summary, validRows.filter((row) => !row.isValid));
-  const entries = getAuditTrailEntries();
-  entries.push(record);
-  saveAuditTrailEntries(entries);
+  const record = await buildAuditTrailRecord(fileName, rules, summary, validRows.filter((row) => !row.isValid));
+  const { error } = await supabase.from('audit_trail_entries').insert(toRow(record));
+  if (error) throw error;
   return record;
 }
 
-export function ensureSeededHistoricalRun(): void {
-  const entries = getAuditTrailEntries();
-  if (entries.some((entry) => entry.runId === 'RV-2026-000004')) {
-    return;
-  }
+export async function ensureSeededHistoricalRun(): Promise<void> {
+  const { data, error } = await supabase
+    .from('audit_trail_entries')
+    .select('run_id')
+    .eq('run_id', 'RV-2026-000004')
+    .maybeSingle();
+  if (error) throw error;
+  if (data) return;
 
-  entries.push({
+  const seed: AuditTrailEntry = {
     runId: 'RV-2026-000004',
     dateTime: '2026-03-15T10:42:00.000Z',
     fileName: 'raffle-test-data.csv',
@@ -114,44 +182,56 @@ export function ensureSeededHistoricalRun(): void {
     outsideCampaignPeriod: 3,
     exceptionEvidence: null,
     status: 'Completed',
-  });
+  };
 
-  saveAuditTrailEntries(entries);
+  const { error: insertError } = await supabase.from('audit_trail_entries').insert(toRow(seed));
+  // 23505 = unique_violation: another concurrent call (e.g. React Strict Mode's double effect
+  // invocation in dev) already inserted the seed row first, which is fine.
+  if (insertError && insertError.code !== '23505') throw insertError;
 }
 
-export function getRunById(runId: string): AuditTrailEntry | null {
-  return getAuditTrailEntries().find((entry) => entry.runId === runId) || null;
+export async function getRunById(runId: string): Promise<AuditTrailEntry | null> {
+  const { data, error } = await supabase.from('audit_trail_entries').select('*').eq('run_id', runId).maybeSingle();
+  if (error) throw error;
+  return data ? fromRow(data as AuditTrailRow) : null;
 }
 
-export function getRunEvidence(runId: string) {
-  const run = getRunById(runId);
+export async function getRunEvidence(runId: string) {
+  const run = await getRunById(runId);
   return run && Array.isArray(run.exceptionEvidence) ? run.exceptionEvidence : [];
 }
 
-export function getWorkingPapers(): Record<string, WorkingPaper> {
-  return readStorage<Record<string, WorkingPaper>>(WORKING_PAPER_STORAGE_KEY, {});
+interface WorkingPaperRow {
+  run_id: string;
+  auditor_notes: string;
+  conclusion: string;
+  prepared_by: string;
+  reviewed_by: string;
+  review_status: string;
+  preparation_date: string | null;
+  review_date: string | null;
 }
 
-export function saveWorkingPapers(workingPapers: Record<string, WorkingPaper>): void {
-  writeStorage(WORKING_PAPER_STORAGE_KEY, workingPapers);
+function workingPaperFromRow(row: WorkingPaperRow): WorkingPaper {
+  return {
+    runId: row.run_id,
+    auditorNotes: row.auditor_notes || '',
+    conclusion: row.conclusion || '',
+    preparedBy: row.prepared_by || '',
+    reviewedBy: row.reviewed_by || '',
+    reviewStatus: (['Draft', 'Prepared', 'Reviewed'] as const).includes(row.review_status as 'Draft' | 'Prepared' | 'Reviewed')
+      ? (row.review_status as WorkingPaper['reviewStatus'])
+      : 'Draft',
+    preparationDate: row.preparation_date || '',
+    reviewDate: row.review_date || '',
+  };
 }
 
-export function getWorkingPaperByRun(runId: string): WorkingPaper {
-  const workingPapers = getWorkingPapers();
-  const stored = workingPapers[runId];
-  return stored
-    ? {
-        runId,
-        auditorNotes: stored.auditorNotes || '',
-        conclusion: stored.conclusion || '',
-        preparedBy: stored.preparedBy || '',
-        reviewedBy: stored.reviewedBy || '',
-        reviewStatus: (['Draft', 'Prepared', 'Reviewed'] as const).includes(stored.reviewStatus)
-          ? stored.reviewStatus
-          : 'Draft',
-        preparationDate: stored.preparationDate || '',
-        reviewDate: stored.reviewDate || '',
-      }
+export async function getWorkingPaperByRun(runId: string): Promise<WorkingPaper> {
+  const { data, error } = await supabase.from('working_papers').select('*').eq('run_id', runId).maybeSingle();
+  if (error) throw error;
+  return data
+    ? workingPaperFromRow(data as WorkingPaperRow)
     : {
         runId,
         auditorNotes: '',
@@ -164,17 +244,16 @@ export function getWorkingPaperByRun(runId: string): WorkingPaper {
       };
 }
 
-export function saveWorkingPaperByRun(runId: string, data: Omit<WorkingPaper, 'runId'>): void {
-  const workingPapers = getWorkingPapers();
-  workingPapers[runId] = {
-    runId,
-    auditorNotes: data.auditorNotes || '',
+export async function saveWorkingPaperByRun(runId: string, data: Omit<WorkingPaper, 'runId'>): Promise<void> {
+  const { error } = await supabase.from('working_papers').upsert({
+    run_id: runId,
+    auditor_notes: data.auditorNotes || '',
     conclusion: data.conclusion || '',
-    preparedBy: data.preparedBy || '',
-    reviewedBy: data.reviewedBy || '',
-    reviewStatus: data.reviewStatus || 'Draft',
-    preparationDate: data.preparationDate || '',
-    reviewDate: data.reviewDate || '',
-  };
-  saveWorkingPapers(workingPapers);
+    prepared_by: data.preparedBy || '',
+    reviewed_by: data.reviewedBy || '',
+    review_status: data.reviewStatus || 'Draft',
+    preparation_date: data.preparationDate || null,
+    review_date: data.reviewDate || null,
+  });
+  if (error) throw error;
 }

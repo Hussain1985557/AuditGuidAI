@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCrossView } from '@/lib/crossView';
 import { formatNumber } from '@/lib/csv';
-import { getRemediationByFinding } from '@/lib/remediation';
+import { getRemediationRecords, remediationFromMap } from '@/lib/remediation';
 import {
   branchRiskDefaultWeights,
   branchEvidenceFields,
@@ -17,11 +17,12 @@ import {
   buildPendingComplaintImport,
   canonicalBranchId,
   branchDisplayName,
+  clearAllBranchRiskData,
   confirmBranchImport,
   ensureBranchRiskDemoData,
   exportBranchRiskAssessment,
   getBranchRiskStore,
-  saveBranchRiskStore,
+  saveBranchRiskWeights,
   validateComplaintImport,
 } from '@/lib/branchRisk';
 import type {
@@ -30,6 +31,7 @@ import type {
   BranchRiskStore,
   BranchRiskWeights,
   PendingBranchImport,
+  Remediation,
 } from '@/lib/types';
 
 const DRIVER_LABELS: Record<keyof BranchRiskWeights, string> = {
@@ -58,6 +60,7 @@ export default function BranchRiskPage() {
 
   const [store, setStore] = useState<BranchRiskStore | null>(null);
   const [metrics, setMetrics] = useState<BranchRiskMetric[]>([]);
+  const [remediationMap, setRemediationMap] = useState<Record<string, Remediation>>({});
   const [profileBranch, setProfileBranch] = useState<string | null>(null);
   const [showUploadCentre, setShowUploadCentre] = useState(false);
   const [showMethodology, setShowMethodology] = useState(false);
@@ -67,14 +70,22 @@ export default function BranchRiskPage() {
   const [pendingImport, setPendingImport] = useState<PendingBranchImport | null>(null);
   const [importMessage, setImportMessage] = useState('');
 
-  function refresh() {
-    setStore(getBranchRiskStore());
-    setMetrics(branchRiskMetrics());
+  async function refresh() {
+    const [nextStore, nextMetrics, nextRemediationMap] = await Promise.all([
+      getBranchRiskStore(),
+      branchRiskMetrics(),
+      getRemediationRecords(),
+    ]);
+    setStore(nextStore);
+    setMetrics(nextMetrics);
+    setRemediationMap(nextRemediationMap);
   }
 
   useEffect(() => {
-    ensureBranchRiskDemoData();
-    refresh();
+    void (async () => {
+      await ensureBranchRiskDemoData();
+      await refresh();
+    })();
   }, []);
 
   const profileItem = useMemo(
@@ -93,8 +104,8 @@ export default function BranchRiskPage() {
     setProfileBranch(null);
   }
 
-  function openMethodology() {
-    const currentStore = getBranchRiskStore();
+  async function openMethodology() {
+    const currentStore = await getBranchRiskStore();
     setWeightsForm(currentStore.weights || branchRiskDefaultWeights);
     setWeightError(false);
     setShowMethodology(true);
@@ -115,8 +126,8 @@ export default function BranchRiskPage() {
     setPendingImport({ ...pendingImport, data });
   }
 
-  function handleConfirmImport() {
-    if (!pendingImport || !store) return;
+  async function handleConfirmImport() {
+    if (!pendingImport) return;
     if (pendingImport.sourceKey === 'complaints') {
       const validationMessage = validateComplaintImport(pendingImport);
       if (validationMessage) {
@@ -124,39 +135,34 @@ export default function BranchRiskPage() {
         return;
       }
     }
-    const nextStore = confirmBranchImport(store, pendingImport);
-    saveBranchRiskStore(nextStore);
+    await confirmBranchImport(pendingImport);
+    await refresh();
     setPendingImport(null);
-    refresh();
   }
 
   function handleCancelImport() {
     setPendingImport(null);
   }
 
-  function handleSaveWeights() {
+  async function handleSaveWeights() {
     const total = Object.values(weightsForm).reduce((sum, value) => sum + Number(value || 0), 0);
     if (total !== 100) {
       setWeightError(true);
       return;
     }
     setWeightError(false);
-    const currentStore = getBranchRiskStore();
-    const nextStore = { ...currentStore, weights: weightsForm };
-    saveBranchRiskStore(nextStore);
+    await saveBranchRiskWeights(weightsForm);
+    await refresh();
     setShowMethodology(false);
-    refresh();
   }
 
-  function handleClearDemoData() {
-    const currentStore = getBranchRiskStore();
-    const nextStore = { ...currentStore, sources: {}, demo: false, uploads: {} };
-    saveBranchRiskStore(nextStore);
-    refresh();
+  async function handleClearDemoData() {
+    await clearAllBranchRiskData();
+    await refresh();
   }
 
-  function handleRunAi() {
-    const first = branchRiskMetrics()[0];
+  async function handleRunAi() {
+    const first = (await branchRiskMetrics())[0];
     if (first) openProfile(first.branch);
   }
 
@@ -410,7 +416,7 @@ export default function BranchRiskPage() {
                 {evidenceRecords(profileItem, evidenceKey).length ? (
                   evidenceKey === 'findings' ? (
                     profileItem.openFindings.map((finding) => {
-                      const remediation = getRemediationByFinding(finding.findingId);
+                      const remediation = remediationFromMap(remediationMap, finding.findingId);
                       return (
                         <article className="branch-evidence-record" key={finding.findingId}>
                           <div className="branch-evidence-record-heading">
@@ -439,7 +445,7 @@ export default function BranchRiskPage() {
                     })
                   ) : evidenceKey === 'controls' ? (
                     profileItem.overdueActions.map((finding) => {
-                      const remediation = getRemediationByFinding(finding.findingId);
+                      const remediation = remediationFromMap(remediationMap, finding.findingId);
                       const daysOverdue = Math.max(0, Math.floor((Date.now() - new Date(finding.targetDate).getTime()) / 86400000));
                       return (
                         <article className="branch-evidence-record" key={finding.findingId}>
@@ -458,7 +464,7 @@ export default function BranchRiskPage() {
                     })
                   ) : (
                     genericEvidenceRecords(profileItem, evidenceKey).map((record, index) => {
-                      const meta = branchRiskSourceMeta(evidenceKey);
+                      const meta = branchRiskSourceMeta(evidenceKey, store as BranchRiskStore);
                       const fields = branchEvidenceFields(record, evidenceKey).filter(
                         ([, value]) => value !== undefined && value !== ''
                       );
@@ -552,7 +558,7 @@ export default function BranchRiskPage() {
 
           <div className="branch-upload-grid">
             {branchRiskSourceDefinitions.map((source) => {
-              const records = branchRiskRecords(source.key);
+              const records = branchRiskRecords(store, source.key);
               const upload = store.uploads?.[source.key];
               return (
                 <div className="branch-upload-card" key={source.key}>
@@ -589,7 +595,7 @@ export default function BranchRiskPage() {
 
           <div className="data-quality-summary">
             {(() => {
-              const total = branchRiskSourceDefinitions.reduce((sum, source) => sum + branchRiskRecords(source.key).length, 0);
+              const total = branchRiskSourceDefinitions.reduce((sum, source) => sum + branchRiskRecords(store, source.key).length, 0);
               const invalid = Object.values(store.uploads || {}).reduce((sum, upload) => sum + (upload?.invalidRecords || 0), 0);
               const duplicates = Object.values(store.uploads || {}).reduce((sum, upload) => sum + (upload?.duplicateRecords || 0), 0);
               return (
