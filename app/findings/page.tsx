@@ -177,7 +177,7 @@ export default function FindingsPage() {
         <section className="panel findings-list-panel">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">Local storage</p>
+              <p className="eyebrow">Supabase</p>
               <h2>Audit Findings</h2>
             </div>
           </div>

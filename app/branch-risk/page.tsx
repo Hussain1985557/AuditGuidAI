@@ -56,7 +56,7 @@ const WEIGHT_LABELS: Record<keyof BranchRiskWeights, string> = {
 
 export default function BranchRiskPage() {
   const router = useRouter();
-  const { setIntent } = useCrossView();
+  const { intent, setIntent } = useCrossView();
 
   const [store, setStore] = useState<BranchRiskStore | null>(null);
   const [metrics, setMetrics] = useState<BranchRiskMetric[]>([]);
@@ -87,6 +87,14 @@ export default function BranchRiskPage() {
       await refresh();
     })();
   }, []);
+
+  useEffect(() => {
+    if (intent?.type === 'openBranchProfile') {
+      openProfile(intent.branch);
+      setIntent(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent]);
 
   const profileItem = useMemo(
     () => (profileBranch ? metrics.find((item) => item.branch === profileBranch) || null : null),
